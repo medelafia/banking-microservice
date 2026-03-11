@@ -1,9 +1,11 @@
 package com.transactionservice.service;
 
+import com.transactionservice.entities.NotificationEvent;
 import com.transactionservice.entities.Transaction;
 import com.transactionservice.events.TransactionCreatedEvent;
 import com.transactionservice.repositories.TransactionRepository;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.sql.Date;
@@ -20,6 +22,7 @@ public class TransactionService {
     }
 
     public Transaction save(Transaction transaction) {
+
         return transactionRepository.save(transaction);
     }
     public List<Transaction> getAccountTransactions(String accountId) {

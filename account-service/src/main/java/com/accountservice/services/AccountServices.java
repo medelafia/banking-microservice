@@ -1,9 +1,12 @@
 package com.accountservice.services;
 
 import com.accountservice.dto.AccountResponse;
+import com.accountservice.dto.NotificationEvent;
 import com.accountservice.dto.OperationRequest;
 import com.accountservice.dto.OperationResponse;
 import com.accountservice.entities.Account;
+import com.accountservice.entities.User;
+import com.accountservice.enums.NotificationEventType;
 import com.accountservice.enums.TransactionStatus;
 import com.accountservice.enums.TransactionType;
 import com.accountservice.events.TransactionCreatedEvent;
@@ -14,25 +17,33 @@ import com.accountservice.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+
+import javax.swing.text.html.Option;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Time;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class AccountServices {
     private final AccountRepository accountRepository;
-    private final KafkaTemplate<String, TransactionCreatedEvent> kafkaTemplate;
-    private static final String TOPIC = "transactions-topic";
+    private final KafkaTemplate<String, TransactionCreatedEvent> kafkaTemplateTransaction;
+    private final KafkaTemplate<String, NotificationEvent> kafkaTemplateNotification;
+    private static final String TRANSACTION_TOPIC = "transactions-topic";
+    private static final String NOTIFICATION_TOPIC = "notifications-topic";
     private final UserRepository  userRepository;
 
-    public AccountServices(AccountRepository accountRepository , KafkaTemplate<String, TransactionCreatedEvent> kafkaTemplate , UserRepository userRepository) {
+    public AccountServices(AccountRepository accountRepository , KafkaTemplate<String, TransactionCreatedEvent> kafkaTemplateTransaction , KafkaTemplate<String, NotificationEvent> kafkaTemplateNotification , UserRepository userRepository) {
         this.accountRepository = accountRepository;
-        this.kafkaTemplate = kafkaTemplate;
+        this.kafkaTemplateTransaction = kafkaTemplateTransaction;
+        this.kafkaTemplateNotification = kafkaTemplateNotification;
         this.userRepository = userRepository;
     }
 
@@ -50,7 +61,6 @@ public class AccountServices {
 
     @Transactional
     public AccountResponse createAccount(Account account) {
-        System.out.println(account.getUser().getId());
         if(this.userRepository.findById(account.getUser().getId()).getStatusCode().isError()) {
             throw new AccountNotFoundException("User with id " + account.getUser().getId() + " doesn't exist");
         }
@@ -61,15 +71,39 @@ public class AccountServices {
         Account savedAccount = this.accountRepository.save(account);
         savedAccount.setUser(this.userRepository.findById(account.getUser().getId()).getBody());
 
+        this.kafkaTemplateNotification.send(
+                NOTIFICATION_TOPIC ,
+                NotificationEvent.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .message("Account created")
+                        .eventType(NotificationEventType.ACCOUNT_CREATED_EVENT)
+                        .timestamp(Timestamp.from(Instant.now()))
+                        .email(account.getUser().getEmail())
+                        .build()
+        );
 
         return AccountResponse.from(savedAccount);
     }
 
     @Transactional
     public void deleteAccount(String accountId) {
-        if(!this.accountRepository.existsById(accountId)) {
+        Optional<Account> account = this.accountRepository.findById(accountId) ;
+        if(!account.isPresent()) {
             throw new AccountNotFoundException("Account with id " + accountId + " does not exist");
         }
+
+        User user = this.userRepository.findById(account.get().getUserId()).getBody();
+
+        this.kafkaTemplateNotification.send(
+                NOTIFICATION_TOPIC ,
+                NotificationEvent.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .message("Account "+ accountId + " deleted")
+                        .eventType(NotificationEventType.ACCOUNT_DELETED_EVENT)
+                        .timestamp(Timestamp.from(Instant.now()))
+                        .email(user.getEmail())
+                        .build()
+        );
         accountRepository.deleteById(accountId);
     }
 
@@ -81,14 +115,25 @@ public class AccountServices {
         }
 
         account.setBalance(account.getBalance().subtract(operationRequest.getAmount()));
-        this.kafkaTemplate.send(TOPIC , TransactionCreatedEvent.builder()
+        accountRepository.save(account) ;
+
+        this.kafkaTemplateTransaction.send(TRANSACTION_TOPIC , TransactionCreatedEvent.builder()
                 .accountId(accountId)
                 .amount(operationRequest.getAmount().doubleValue())
                 .transactionDate(Date.valueOf(LocalDate.now()))
                 .transactionTime(Time.valueOf(LocalTime.now()))
                 .transactionType(TransactionType.WITHDRAW)
                 .build()) ;
-        accountRepository.save(account) ;
+        this.kafkaTemplateNotification.send(
+                NOTIFICATION_TOPIC ,
+                NotificationEvent.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .message("New Transaction Success , Transaction type : " + TransactionType.WITHDRAW.toString() + " , amount : " + operationRequest.getAmount().doubleValue())
+                        .eventType(NotificationEventType.TRANSACTION_EVENT)
+                        .timestamp(Timestamp.from(Instant.now()))
+                        .email(this.userRepository.findById(account.getUserId()).getBody().getEmail())
+                        .build()
+        );
 
         return OperationResponse.builder()
                 .status(TransactionStatus.SUCCESS)
@@ -105,15 +150,25 @@ public class AccountServices {
         }
         account.setBalance(account.getBalance().add(operationRequest.getAmount()));
 
-        this.kafkaTemplate.send(TOPIC , TransactionCreatedEvent.builder()
-                        .accountId(accountId)
-                        .amount(operationRequest.getAmount().doubleValue())
-                        .transactionDate(Date.valueOf(LocalDate.now()))
-                        .transactionTime(Time.valueOf(LocalTime.now()))
-                        .transactionType(TransactionType.DEPOSIT)
-                .build()) ;
         accountRepository.save(account) ;
 
+        this.kafkaTemplateTransaction.send(TRANSACTION_TOPIC , TransactionCreatedEvent.builder()
+                .accountId(accountId)
+                .amount(operationRequest.getAmount().doubleValue())
+                .transactionDate(Date.valueOf(LocalDate.now()))
+                .transactionTime(Time.valueOf(LocalTime.now()))
+                .transactionType(TransactionType.DEPOSIT)
+                .build()) ;
+        this.kafkaTemplateNotification.send(
+                NOTIFICATION_TOPIC ,
+                NotificationEvent.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .message("New Transaction Success , Transaction type : " + TransactionType.WITHDRAW.toString() + " ,amout : " + operationRequest.getAmount().doubleValue())
+                        .eventType(NotificationEventType.TRANSACTION_EVENT)
+                        .timestamp(Timestamp.from(Instant.now()))
+                        .email(this.userRepository.findById(account.getUserId()).getBody().getEmail())
+                        .build()
+        );
         return OperationResponse.builder()
                 .status(TransactionStatus.SUCCESS)
                 .TransactionType(TransactionType.DEPOSIT)
@@ -133,6 +188,24 @@ public class AccountServices {
 
         this.accountRepository.save(account);
         this.accountRepository.save(destAccount);
+
+        this.kafkaTemplateTransaction.send(TRANSACTION_TOPIC , TransactionCreatedEvent.builder()
+                .accountId(accountId)
+                .amount(operationRequest.getAmount().doubleValue())
+                .transactionDate(Date.valueOf(LocalDate.now()))
+                .transactionTime(Time.valueOf(LocalTime.now()))
+                .transactionType(TransactionType.TRANSFER)
+                .build()) ;
+        this.kafkaTemplateNotification.send(
+                NOTIFICATION_TOPIC ,
+                NotificationEvent.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .message("New Transaction Success , Transaction type : " + TransactionType.TRANSFER.toString() + " ,amout : " + operationRequest.getAmount().doubleValue())
+                        .eventType(NotificationEventType.TRANSACTION_EVENT)
+                        .timestamp(Timestamp.from(Instant.now()))
+                        .email(this.userRepository.findById(account.getAccountId()).getBody().getEmail())
+                        .build()
+        );
 
         return OperationResponse.builder()
                 .status(TransactionStatus.SUCCESS)

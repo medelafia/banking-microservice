@@ -1,7 +1,7 @@
 package com.notificationservice.events;
 
 
-import com.notificationservice.enums.EventType;
+import com.notificationservice.enums.NotificationEventType;
 import lombok.*;
 
 import java.sql.Timestamp;
@@ -13,7 +13,9 @@ import java.sql.Timestamp;
 @Setter
 @ToString
 @Builder
-public class Event {
+public class NotificationEvent {
     private String eventId;
     private Timestamp timestamp;
+    private NotificationEventType notificationEventType;
+    private String message ;
 }
