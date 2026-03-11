@@ -1,7 +1,7 @@
-package com.transactionservice.entities;
+package com.userservice.entities;
 
 
-import com.notificationservice.enums.NotificationEventType;
+import com.userservice.enums.NotificationEventType;
 import lombok.*;
 
 import java.sql.Timestamp;
@@ -18,4 +18,5 @@ public class NotificationEvent {
     private Timestamp timestamp;
     private NotificationEventType notificationEventType;
     private String message ;
+    private String email ;
 }

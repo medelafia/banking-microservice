@@ -17,7 +17,7 @@ import java.sql.Timestamp;
 public class NotificationEvent {
     private String eventId;
     private Timestamp timestamp;
-    private NotificationEventType eventType;
+    private NotificationEventType notificationEventType;
     private String message ;
     private String email ;
 }

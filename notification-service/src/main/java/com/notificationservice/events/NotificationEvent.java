@@ -18,4 +18,5 @@ public class NotificationEvent {
     private Timestamp timestamp;
     private NotificationEventType notificationEventType;
     private String message ;
+    private String email ;
 }

@@ -1,4 +1,4 @@
-package com.transactionservice.enums;
+package com.userservice.enums;
 
 public enum NotificationEventType {
     TRANSACTION_EVENT, USER_CREATED_EVENT , ACCOUNT_CREATED_EVENT , ACCOUNT_DELETED
