@@ -6,10 +6,14 @@ volumes:
   elasticsearch-data:
     driver: local
 services:
-  node-exporter:
+  server1:
     image: quay.io/prometheus/node-exporter:latest
     ports:
       - "9100:9100"
+  server2:
+    image: quay.io/prometheus/node-exporter:latest
+    ports:
+      - "9200:9100"
   prometheus:
     image: prom/prometheus:v2.44.0
     container_name: prometheus
@@ -26,56 +30,64 @@ services:
     restart: unless-stopped
     volumes:
       - ./volumes/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
-    container_name: elasticsearch
-    environment:
-      - node.name=elasticsearch
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true
-      - xpack.security.enabled=false
-      - xpack.security.audit.enabled=true
-      - ELASTIC_PASSWORD=elastic_password123 # Change this password
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
-      - ./volumes/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
-    ports:
-      - "9200:9200"
-    networks:
-      - microservice-net
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.17.0
-    container_name: kibana
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=elastic
-      - ELASTICSEARCH_PASSWORD=elastic_password123 # Same as Elasticsearch
-    ports:
-      - "5601:5601"
-    networks:
-      - microservice-net
-    depends_on:
-      - elasticsearch
-    volumes:
-      - ./volumes/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.17.0
-    container_name: logstash
-    environment:
-      - LS_JAVA_OPTS=-Xms512m -Xmx512m
-    volumes:
-      - ./volumes/logstash/pipeline:/usr/share/logstash/pipeline
-      - ./volumes/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
-    ports:
-      - "5044:5044"
-    networks:
-      - microservice-net
-    depends_on:
-      - elasticsearch
+#
+#  elasticsearch:
+#    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+#    container_name: elasticsearch
+#    environment:
+#      - node.name=elasticsearch
+#      - discovery.type=single-node
+#      - bootstrap.memory_lock=true
+#      - xpack.security.enabled=false
+#      - xpack.security.audit.enabled=true
+#      - ELASTIC_PASSWORD=elastic_password123 # Change this password
+#    ulimits:
+#      memlock:
+#        soft: -1
+#        hard: -1
+#    volumes:
+#      - elasticsearch-data:/usr/share/elasticsearch/data
+#      - ./volumes/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+#    ports:
+#      - "9200:9200"
+#    networks:
+#      - microservice-net
+#    healthcheck:
+#      test: ["CMD", "curl", "-u", "elastic:elastic_password123", "-f", "http://localhost:9200"]
+#      interval: 10s
+#      timeout: 10s
+#      retries: 5
+#
+#  kibana:
+#    image: docker.elastic.co/kibana/kibana:8.17.0
+#    container_name: kibana
+#    environment:
+#      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+#
+#      # Same as Elasticsearch
+#    ports:
+#      - "5601:5601"
+#    networks:
+#      - microservice-net
+#    depends_on:
+#      elasticsearch:
+#        condition: service_started
+#    volumes:
+#      - ./volumes/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
+#
+#  logstash:
+#    image: docker.elastic.co/logstash/logstash:8.17.0
+#    container_name: logstash
+#    environment:
+#      - LS_JAVA_OPTS=-Xms512m -Xmx512m
+#
+#    volumes:
+#      - ./volumes/logstash/pipeline:/usr/share/logstash/pipeline
+#      - ./volumes/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+#    ports:
+#      - "5044:5044"
+#    networks:
+#      - microservice-net
+#    depends_on:
+#      elasticsearch:
+#        condition: service_started
